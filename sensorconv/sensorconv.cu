@@ -10,11 +10,15 @@
 #define datastring ""
 //#define datastring "D:/trivialNetworkTest/sethsensor/"
 
+#define SAVE_PERIOD 10
+
 struct SensorConvDatasetInfo {
 	std::ifstream* datafile;
 	size_t windowSize;
+#ifndef SAVE_PERIOD
 	size_t firstQualityColumn;
 	float qualityThresh;
+#endif
 	size_t firstDataColumn;
 	size_t lastDataColumn;
 	std::string outputName;
@@ -56,11 +60,13 @@ int main() {
 	std::cout << "Enter last data column: ";
 	std::cin >> dataInfo.lastDataColumn;
 
+#ifndef SAVE_PERIOD
 	std::cout << "Enter quality threshold: ";
 	std::cin >> dataInfo.qualityThresh;
 
 	std::cout << "Enter first quality column: ";
 	std::cin >> dataInfo.firstQualityColumn;
+#endif
 
 	std::cout << "Enter output file name: ";
 	std::cin >> dataInfo.outputName;
@@ -129,16 +135,23 @@ void convertInterval(IntervalData* intData) {
 				if (data[colNum].size() > intData->info->windowSize)
 					data[colNum].pop_front();
 			}
+#ifndef SAVE_PERIOD
 			else if (c >= intData->info->firstQualityColumn) {
 				float val;
 				(std::stringstream(dum)) >> val;
 				if (c - intData->info->firstQualityColumn < data.size())
 					quality.push_back(val);
 			}
+#endif
 		}
 
+#ifndef SAVE_PERIOD
 		for (size_t q = 0; q < quality.size(); q++) {
 			if (fabs(quality[q]) >= intData->info->qualityThresh && data[q].size() == intData->info->windowSize) {
+#else
+		for (size_t q = 0; q < data.size(); q++) {
+			if ((i - intData->startIndex) % SAVE_PERIOD == 0 && data[q].size() == intData->info->windowSize) {
+#endif
 				for (size_t invert = 0; invert < 2; invert++) {
 					std::vector<float> inputs;
 					long long initVal = (invert == 0 ? data[q].front() : -data[q].front());
@@ -171,7 +184,12 @@ void convertInterval(IntervalData* intData) {
 					}
 
 					fwrite(&intData->output, sizeof(float), 1, outfile);
+#ifndef SAVE_PERIOD
 					fwrite(&quality[q], sizeof(float), 1, outfile);
+#else
+					float dum = 0;
+					fwrite(&dum, sizeof(float), 1, outfile);
+#endif
 					if (inputs.size() != intData->info->windowSize)
 						std::cout << "Invalid size window!" << std::endl;
 					else

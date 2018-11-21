@@ -20,9 +20,12 @@
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="trivialbinpacker.cu" />
+    <CudaCompile Include="trivialbinpackerPeakFinder.cu" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="sort.cuh" />
+    <ClInclude Include="trivialbinpackerInterpolate.cuh" />
+    <ClInclude Include="trivialbinpackerPeakFinder.cuh" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{76D90DC7-B045-4BBB-BF0E-464637E4811B}</ProjectGuid>
