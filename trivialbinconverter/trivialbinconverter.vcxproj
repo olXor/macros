@@ -19,11 +19,16 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="sensorconv.cu" />
+    <CudaCompile Include="trivialbinconverter.cu" />
+    <CudaCompile Include="trivialbinconverterPeakFinder.cu" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="trivialbinconverterInterpolate.cuh" />
+    <ClInclude Include="trivialbinconverterPeakFinder.cuh" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{E86730CD-37BD-4183-A4E6-5A44975C35F5}</ProjectGuid>
-    <RootNamespace>sensorconv</RootNamespace>
+    <ProjectGuid>{EB4EC326-9949-4C84-A64F-31CC56B21350}</ProjectGuid>
+    <RootNamespace>trivialbinconverter</RootNamespace>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">

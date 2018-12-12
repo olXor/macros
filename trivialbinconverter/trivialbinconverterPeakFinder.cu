@@ -1,10 +1,10 @@
-#include "trivialbinpackerPeakFinder.cuh"
+#include "trivialbinconverterPeakFinder.cuh"
 
 #define MATH_PI 3.14159265358979323846
 
 #define MIN_FIRST_HARMONIC 3
 #define MAX_FIRST_HARMONIC 20
-#define FIRST_HARMONIC_MIN_HEIGHT 0.25
+#define FIRST_HARMONIC_MIN_HEIGHT 0.4
 #define HARMONIC_WIDTH 2
 #define HARMONIC_FALLOFF 0.9
 
@@ -18,8 +18,6 @@
 #define HARMONIC_PERIOD_LONG_SEARCH_END 1.3f
 #define HARMONIC_PERIOD_SHORT_LONG_RATIO_THRESH 0.80
 #define PROHIBIT_TWO_SHORTS_IN_ROW 1
-
-#define ADJUST_CLOSE_VALLEY_THRESHOLD 1.5f
 
 #define STARTING_PEAK_THRESHOLD 0.5
 #define EDGE_EXCLUSION 0//(1.1*PEAK_FIND_DERIV_SMOOTHING_RANGE)
@@ -276,85 +274,6 @@ float searchForPeaksAndValleys(std::vector<float>* deriv, std::vector<float>* pe
 	return periodMean;
 }
 
-void adjustValleys(std::vector<float>* deriv, std::vector<float>* peaks, size_t harmonicPeriod) {
-	std::vector<size_t> peakLocs;
-	std::vector<size_t> valleyLocs;
-
-	size_t lastPeak = peaks->size();
-	size_t lastValley = peaks->size();
-	float peakToValleyDist = 0;
-	size_t numPeakToValleys = 0;
-	float valleyToPeakDist = 0;
-	size_t numValleyToPeaks = 0;
-	float averagePeakHeight = 0;
-	float averageValleyHeight = 0;
-	for (size_t i = 0; i < peaks->size(); i++) {
-		if ((*peaks)[i] == 1) {
-			peakLocs.push_back(i);
-			if (lastValley < peaks->size()) {
-				valleyToPeakDist += i - lastValley;
-				numValleyToPeaks++;
-			}
-			averagePeakHeight += abs((*deriv)[i]);
-			lastPeak = i;
-		}
-		else if ((*peaks)[i] == -1) {
-			valleyLocs.push_back(i);
-			if (lastPeak < peaks->size()) {
-				peakToValleyDist += i - lastPeak;
-				numPeakToValleys++;
-			}
-			averageValleyHeight += abs((*deriv)[i]);
-			lastValley = i;
-		}
-	}
-	peakToValleyDist /= numPeakToValleys;
-	valleyToPeakDist /= numValleyToPeaks;
-	averagePeakHeight /= peakLocs.size();
-	averageValleyHeight /= valleyLocs.size();
-
-	//bool waveInverted = (peakToValleyDist < valleyToPeakDist ? true : false);
-	bool waveInverted = (averageValleyHeight > averagePeakHeight ? true : false);	//can often be wrong if there is only one clear peak and valley per pulse, but that should be taken care of by the close/far adjustment (inversion by horizontal distance is better in those cases)
-
-	std::vector<size_t>* primaryLocs = (!waveInverted ? &peakLocs : &valleyLocs);
-	if (primaryLocs->size() == 0)
-		return;
-
-	std::vector<size_t> closeOptima;
-	std::vector<size_t> farOptima;
-	float averageCloseOptimum = 0;	//actually sum of optima
-	float averageFarOptimum = 0;
-	for (size_t i = 0; i < primaryLocs->size() - 1; i++) {
-		float farOptimum = (!waveInverted ? -9999 : 9999);
-		size_t farOptimumLoc = (*primaryLocs)[i] + 1;
-		float closeOptimum = (!waveInverted ? -9999 : 9999);
-		size_t closeOptimumLoc = (*primaryLocs)[i] + 1;
-
-		for (size_t j = (*primaryLocs)[i] + 1; j < (*primaryLocs)[i + 1]; j++) {
-			if ((!waveInverted ? (*deriv)[j] > closeOptimum : (*deriv)[j] < closeOptimum) && j - (*primaryLocs)[i] < ((*primaryLocs)[i + 1] - (*primaryLocs)[i]) / 2) {
-				closeOptimum = (*deriv)[j];
-				closeOptimumLoc = j;
-			}
-			if ((!waveInverted ? (*deriv)[j] > farOptimum : (*deriv)[j] < farOptimum) && j - (*primaryLocs)[i] >= ((*primaryLocs)[i + 1] - (*primaryLocs)[i]) / 2) {
-				farOptimum = (*deriv)[j];
-				farOptimumLoc = j;
-			}
-			if ((*peaks)[j] == (!waveInverted ? -1 : 1)) {
-				(*peaks)[j] = 0;
-			}
-		}
-		closeOptima.push_back(closeOptimumLoc);
-		farOptima.push_back(farOptimumLoc);
-		averageCloseOptimum += abs(closeOptimum);
-		averageFarOptimum += abs(farOptimum);
-	}
-
-	std::vector<size_t>* optima = (averageCloseOptimum > ADJUST_CLOSE_VALLEY_THRESHOLD*averageFarOptimum ? &closeOptima : &farOptima);
-	for (size_t i = 0; i < optima->size(); i++) {
-		(*peaks)[(*optima)[i]] = (!waveInverted ? -1 : 1);
-	}
-}
-
 void findPeaksAndValleys(std::vector<float>* waveform, std::vector<float>* peaks) {
 	peaks->clear();
 	peaks->resize(waveform->size());
@@ -408,6 +327,4 @@ void findPeaksAndValleys(std::vector<float>* waveform, std::vector<float>* peaks
 			(*peaks)[i] *= 10.0f;
 		}
 	}
-
-	adjustValleys(&peakFindDeriv2, peaks, harmonicPeriod);
 }

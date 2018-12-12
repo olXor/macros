@@ -12,6 +12,8 @@
 
 #define SAVE_PERIOD 10
 
+//#define COMMA_DELIMITER
+
 struct SensorConvDatasetInfo {
 	std::ifstream* datafile;
 	size_t windowSize;
@@ -126,7 +128,11 @@ void convertInterval(IntervalData* intData) {
 
 		std::string dum;
 		quality.clear();
+#ifdef COMMA_DELIMITER
 		for (size_t c = 0; std::getline(lss, dum, ','); c++) {
+#else
+		for (size_t c = 0; lss >> dum; c++) {
+#endif
 			if (c >= intData->info->firstDataColumn && c <= intData->info->lastDataColumn) {
 				long long val;
 				(std::stringstream(dum)) >> val;
