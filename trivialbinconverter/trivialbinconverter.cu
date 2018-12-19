@@ -40,7 +40,6 @@ int main() {
 	}
 
 	std::string fname;
-	size_t outNum = 0;
 	std::vector<float> columns(NUM_INPUTS_1 + NUM_OUTPUTS_1);
 	std::vector<float> unscaledWaveform;
 	std::vector<float> waveform;
@@ -48,10 +47,14 @@ int main() {
 	std::vector<float> peaks;
 	while (std::getline(infilelist, fname)) {
 		std::cout << "Converting " << fname << std::endl;
-		outNum++;
 		FILE* infile = fopen((datastring + fname).c_str(), "rb");
 		std::stringstream outss;
-		outss << datastring << outfname << "_" << outNum;
+		std::string localName;
+		if (fname.find_last_of("\\/") != 0)
+			localName = fname.substr(fname.find_last_of("\\/") + 1, std::string::npos);
+		else
+			localName = fname;
+		outss << datastring << outfname << "_" << localName;
 		FILE* outfile = fopen(outss.str().c_str(), "wb");
 		char* header[HEADER_SIZE];
 		fread(&header, HEADER_SIZE, 1, infile);

@@ -2,9 +2,9 @@
 
 #define MATH_PI 3.14159265358979323846
 
-#define MIN_FIRST_HARMONIC 3
+#define MIN_FIRST_HARMONIC 4
 #define MAX_FIRST_HARMONIC 20
-#define FIRST_HARMONIC_MIN_HEIGHT 0.25
+#define FIRST_HARMONIC_MIN_HEIGHT 0.50
 #define HARMONIC_WIDTH 2
 #define HARMONIC_FALLOFF 0.9
 
@@ -24,6 +24,9 @@
 #define STARTING_PEAK_THRESHOLD 0.5
 #define EDGE_EXCLUSION 0//(1.1*PEAK_FIND_DERIV_SMOOTHING_RANGE)
 
+//#define HARMONIC_DERIV2
+#define HARMONIC_BOTH
+
 std::vector<float> peakFindDeriv1;
 std::vector<float> peakFindDeriv2;
 
@@ -32,6 +35,11 @@ std::vector<float> peakFindDeriv2;
 std::vector<float> fourierRe;
 std::vector<float> fourierIm;
 std::vector<float> fourierAvg;
+
+#define BAND_PASS_HIGH 200
+#define BAND_PASS_LOW 253
+
+void applyBandPassFilter(std::vector<float>* waveform, std::vector<float>* filtered);
 
 /**
 * C++ implementation of FFT
@@ -133,7 +141,7 @@ size_t findFirstHarmonic(std::vector<float>* freq) {
 				forwardMin = std::min(forwardMin, (*freq)[j]);
 				forwardMax = std::max(forwardMax, (*freq)[j]);
 			}
-			if (backMin <= HARMONIC_FALLOFF*(*freq)[i] && forwardMin <= HARMONIC_FALLOFF*(*freq)[i] && backMax < (*freq)[i] && forwardMax < (*freq)[i])
+			if (backMin < HARMONIC_FALLOFF*(*freq)[i] && forwardMin < HARMONIC_FALLOFF*(*freq)[i] && backMax < (*freq)[i] && forwardMax < (*freq)[i])
 				return i;
 		}
 	}
@@ -369,7 +377,13 @@ void findPeaksAndValleys(std::vector<float>* waveform, std::vector<float>* peaks
 	fourierAvg.clear();
 	fourierAvg.resize(FOURIER_PATCH_WIDTH);
 
-	interpolate(&peakFindDeriv2, &fourierRe, FOURIER_PATCH_WIDTH);
+#if defined(HARMONIC_DERIV2) || defined(HARMONIC_BOTH)
+	interpolate(&peakFindDeriv2, &fourierAvg, FOURIER_PATCH_WIDTH);
+#else
+	interpolate(&waveform, &fourierAvg, FOURIER_PATCH_WIDTH);
+#endif
+
+	applyBandPassFilter(&fourierAvg, &fourierRe);
 
 	FFT(1, FOURIER_PATCH_WIDTH_POW, &fourierRe[0], &fourierIm[0]);
 
@@ -379,12 +393,30 @@ void findPeaksAndValleys(std::vector<float>* waveform, std::vector<float>* peaks
 
 	interpolate(&fourierRe, &fourierAvg, FOURIER_PATCH_WIDTH*FOURIER_PATCH_WIDTH / peakFindDeriv2.size());
 
-	size_t deriv2FirstHarmonic = findFirstHarmonic(&fourierAvg);
+	size_t peakFindFirstHarmonic = findFirstHarmonic(&fourierAvg);
 
-	if (deriv2FirstHarmonic == 0)
-		deriv2FirstHarmonic = DEFAULT_FIRST_HARMONIC;
+#if defined(HARMONIC_BOTH)
+	interpolate(waveform, &fourierAvg, FOURIER_PATCH_WIDTH);
 
-	size_t harmonicPeriod = waveform->size() / deriv2FirstHarmonic;
+	applyBandPassFilter(&fourierAvg, &fourierRe);
+
+	FFT(1, FOURIER_PATCH_WIDTH_POW, &fourierRe[0], &fourierIm[0]);
+
+	for (size_t i = 0; i < fourierRe.size(); i++) {
+		fourierRe[i] = sqrt(fourierRe[i] * fourierRe[i] + fourierIm[i] * fourierIm[i]);
+	}
+
+	interpolate(&fourierRe, &fourierAvg, FOURIER_PATCH_WIDTH*FOURIER_PATCH_WIDTH / waveform->size());
+
+	size_t peakFindFirstHarmonicWaveform = findFirstHarmonic(&fourierAvg);
+	if (abs((int)peakFindFirstHarmonicWaveform - (int)DEFAULT_FIRST_HARMONIC) < abs((int)peakFindFirstHarmonic - (int)DEFAULT_FIRST_HARMONIC))
+		peakFindFirstHarmonic = peakFindFirstHarmonicWaveform;
+#endif
+
+	if (peakFindFirstHarmonic == 0)
+		peakFindFirstHarmonic = DEFAULT_FIRST_HARMONIC;
+
+	size_t harmonicPeriod = waveform->size() / peakFindFirstHarmonic;
 
 	float forwardMean = searchForPeaksAndValleys(&peakFindDeriv2, peaks, harmonicPeriod, 1, 1.0f);
 	float backwardMean = searchForPeaksAndValleys(&peakFindDeriv2, peaks, harmonicPeriod, -1, 0.1f);
@@ -410,4 +442,33 @@ void findPeaksAndValleys(std::vector<float>* waveform, std::vector<float>* peaks
 	}
 
 	adjustValleys(&peakFindDeriv2, peaks, harmonicPeriod);
+}
+
+void applyBandPassFilter(std::vector<float>* waveform, std::vector<float>* filtered) {
+	std::vector<float> fourierRe(FOURIER_PATCH_WIDTH);
+	std::vector<float> fourierIm(FOURIER_PATCH_WIDTH);
+
+	interpolate(waveform, &fourierRe, FOURIER_PATCH_WIDTH);
+
+	FFT(1, FOURIER_PATCH_WIDTH_POW, &fourierRe[0], &fourierIm[0]);
+
+	for (size_t i = 0; i < BAND_PASS_HIGH; i++) {
+		size_t midpoint = FOURIER_PATCH_WIDTH / 2;
+		fourierRe[midpoint + i + 1] = 0;
+		fourierIm[midpoint + i + 1] = 0;
+		fourierRe[midpoint - i] = 0;
+		fourierIm[midpoint - i] = 0;
+	}
+	for (size_t i = BAND_PASS_LOW; i < FOURIER_PATCH_WIDTH / 2; i++) {
+		size_t midpoint = FOURIER_PATCH_WIDTH / 2;
+		fourierRe[midpoint + i] = 0;
+		fourierIm[midpoint + i] = 0;
+		fourierRe[midpoint - i - 1] = 0;
+		fourierIm[midpoint - i - 1] = 0;
+	}
+
+	FFT(-1, FOURIER_PATCH_WIDTH_POW, &fourierRe[0], &fourierIm[0]);
+
+	filtered->resize(waveform->size());
+	interpolate(&fourierRe, filtered, FOURIER_PATCH_WIDTH);
 }

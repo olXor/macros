@@ -12,7 +12,7 @@
 
 #define SAVE_PERIOD 10
 
-//#define COMMA_DELIMITER
+#define COMMA_DELIMITER
 
 struct SensorConvDatasetInfo {
 	std::ifstream* datafile;
@@ -29,6 +29,7 @@ struct SensorConvDatasetInfo {
 
 struct IntervalData {
 	std::string fname;
+	std::string suffix;
 	size_t startIndex;
 	size_t endIndex;
 	float output;
@@ -83,10 +84,15 @@ void convertTrainset(SensorConvDatasetInfo* info) {
 
 	while (std::getline((*info->datafile), line)) {
 		IntervalData intData;
-		(std::stringstream(line)) >> intData.fname >> intData.startIndex >> intData.endIndex >> intData.output;
+		std::stringstream lss(line);
+		lss >> intData.fname >> intData.startIndex >> intData.endIndex >> intData.output;
 		intData.info = info;
+		if (!(lss >> intData.suffix))
+			intData.suffix = "";
+		else
+			intData.suffix = "_" + intData.suffix;
 
-		std::cout << "Reading interval: " << intData.fname << " " << intData.startIndex << " " << intData.endIndex << " " << intData.output << std::endl;
+		std::cout << "Reading interval: " << intData.fname << " " << intData.startIndex << " " << intData.endIndex << " " << intData.output << " " << intData.suffix << std::endl;
 		info->outNum++;
 
 		convertInterval(&intData);
@@ -100,7 +106,7 @@ void convertInterval(IntervalData* intData) {
 		return;
 	}
 	std::stringstream outss;
-	outss << datastring << intData->info->outputName << "_" << intData->info->outNum;
+	outss << datastring << intData->info->outputName << intData->suffix << "_" << intData->info->outNum;
 	FILE* outfile = fopen(outss.str().c_str(), "wb");
 	float header = 0;
 	fwrite(&header, sizeof(float), 1, outfile);
@@ -129,10 +135,11 @@ void convertInterval(IntervalData* intData) {
 		std::string dum;
 		quality.clear();
 #ifdef COMMA_DELIMITER
-		for (size_t c = 0; std::getline(lss, dum, ','); c++) {
+		for (size_t c = 0; std::getline(lss, dum, ','); c++)
 #else
-		for (size_t c = 0; lss >> dum; c++) {
+		for (size_t c = 0; lss >> dum; c++)
 #endif
+		{
 			if (c >= intData->info->firstDataColumn && c <= intData->info->lastDataColumn) {
 				long long val;
 				(std::stringstream(dum)) >> val;
@@ -153,11 +160,12 @@ void convertInterval(IntervalData* intData) {
 
 #ifndef SAVE_PERIOD
 		for (size_t q = 0; q < quality.size(); q++) {
-			if (fabs(quality[q]) >= intData->info->qualityThresh && data[q].size() == intData->info->windowSize) {
+			if (fabs(quality[q]) >= intData->info->qualityThresh && data[q].size() == intData->info->windowSize)
 #else
 		for (size_t q = 0; q < data.size(); q++) {
-			if ((i - intData->startIndex) % SAVE_PERIOD == 0 && data[q].size() == intData->info->windowSize) {
+			if ((i - intData->startIndex) % SAVE_PERIOD == 0 && data[q].size() == intData->info->windowSize)
 #endif
+			{
 				for (size_t invert = 0; invert < 2; invert++) {
 					std::vector<float> inputs;
 					long long initVal = (invert == 0 ? data[q].front() : -data[q].front());
@@ -204,4 +212,6 @@ void convertInterval(IntervalData* intData) {
 			}
 		}
 	}
+
+	fclose(outfile);
 }
